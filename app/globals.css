@@ -1,0 +1,232 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Lexend:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  --bg-primary: #0A0E14;
+  --bg-secondary: #111720;
+  --bg-card: #151C28;
+  --bg-hover: #1A2332;
+  --green-glow: #00FF88;
+  --green-bright: #00E67A;
+  --red-glow: #FF3B5C;
+  --red-bright: #E6354F;
+  --slate-text: #94A3B8;
+  --slate-muted: #64748B;
+  --slate-border: #1E293B;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Lexend", system-ui, sans-serif;
+  background-color: var(--bg-primary);
+  color: #E2E8F0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: #253244; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--green-glow); }
+
+/* Greenlight card */
+.gl-card {
+  background: var(--bg-card);
+  border: 1px solid var(--slate-border);
+  border-radius: 12px;
+  transition: all 0.25s ease;
+}
+.gl-card:hover {
+  border-color: rgba(0, 255, 136, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 255, 136, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Traffic light indicator */
+.light-green {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--green-glow);
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.5), 0 0 24px rgba(0, 255, 136, 0.2);
+}
+.light-red {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red-glow);
+  box-shadow: 0 0 8px rgba(255, 59, 92, 0.5), 0 0 24px rgba(255, 59, 92, 0.2);
+}
+.light-yellow {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #FFD700;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.5), 0 0 24px rgba(255, 215, 0, 0.2);
+}
+
+/* Buttons */
+.btn-green {
+  background: linear-gradient(135deg, #00CC6A, #00E67A);
+  color: #000;
+  font-family: "Lexend", system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-green:hover {
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-red {
+  background: linear-gradient(135deg, #CC2E45, #E6354F);
+  color: #fff;
+  font-family: "Lexend", system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-red:hover {
+  box-shadow: 0 0 20px rgba(255, 59, 92, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--slate-text);
+  font-family: "Lexend", system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--slate-border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-ghost:hover {
+  border-color: rgba(0, 255, 136, 0.3);
+  color: var(--green-glow);
+  background: rgba(0, 255, 136, 0.05);
+}
+
+/* Probability bar */
+.prob-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--slate-border);
+  overflow: hidden;
+}
+.prob-fill-green {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--green-bright), var(--green-glow));
+  transition: width 0.6s ease;
+}
+.prob-fill-red {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--red-bright), var(--red-glow));
+  transition: width 0.6s ease;
+}
+
+/* Input styling */
+input[type="email"],
+input[type="password"],
+input[type="text"],
+input[type="number"],
+select {
+  font-family: "Lexend", system-ui, sans-serif;
+  background: var(--bg-secondary);
+  border: 1px solid var(--slate-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #E2E8F0;
+  transition: border-color 0.2s ease;
+  width: 100%;
+}
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--green-glow);
+  box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.08);
+}
+input::placeholder {
+  color: var(--slate-muted);
+}
+
+/* Animations */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+@keyframes slide-up {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 255, 136, 0.2); }
+  50% { box-shadow: 0 0 24px rgba(0, 255, 136, 0.5); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s ease-out forwards;
+}
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* Stagger */
+.stagger-1 { animation-delay: 0.05s; opacity: 0; }
+.stagger-2 { animation-delay: 0.1s; opacity: 0; }
+.stagger-3 { animation-delay: 0.15s; opacity: 0; }
+.stagger-4 { animation-delay: 0.2s; opacity: 0; }
+.stagger-5 { animation-delay: 0.25s; opacity: 0; }
+.stagger-6 { animation-delay: 0.3s; opacity: 0; }
+
+/* Toggle switch */
+.toggle-track {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--slate-border);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.toggle-track.active {
+  background: var(--green-bright);
+}
+.toggle-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s ease;
+}
+.toggle-track.active .toggle-thumb {
+  transform: translateX(20px);
+}
