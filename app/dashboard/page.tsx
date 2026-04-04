@@ -654,7 +654,7 @@ export default function DashboardPage() {
                 <span className="font-mono font-bold text-green-glow">
                   $
                   {(
-                    parseFloat(maxPayout()) - parseFloat(estimatedCost())
+                    Number(maxPayout()) - Number(estimatedCost())
                   ).toFixed(2)}
                 </span>
               </div>
