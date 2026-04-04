@@ -1,110 +1,55 @@
-// Kalshi API v2 client — runs server-side only
-// Docs: https://docs.kalshi.com
+import crypto from "crypto";
 
-const KALSHI_BASE_URL = "https://api.elections.kalshi.com/trade-api/v2";
+const BASE = "https://api.elections.kalshi.com/trade-api/v2";
 
-let cachedToken: string | null = null;
-let tokenExpiry: number = 0;
-
-async function getAuthToken(): Promise<string> {
-  if (cachedToken && Date.now() < tokenExpiry - 300000) {
-    return cachedToken;
-  }
-
-  if (process.env.KALSHI_API_KEY) {
-    return process.env.KALSHI_API_KEY;
-  }
-
-  const res = await fetch(`${KALSHI_BASE_URL}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email: process.env.KALSHI_API_EMAIL,
-      password: process.env.KALSHI_API_PASSWORD,
-    }),
-  });
-
-  if (!res.ok) throw new Error(`Kalshi auth failed: ${res.status}`);
-
-  const data = await res.json();
-  cachedToken = data.token;
-  tokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
-  return cachedToken!;
+function sign(method: string, path: string, ts: number): string {
+  const key = process.env.KALSHI_RSA_PRIVATE_KEY;
+  if (!key) throw new Error("KALSHI_RSA_PRIVATE_KEY not set");
+  const pem = key.replace(/\\n/g, "\n");
+  const msg = `${ts}${method.toUpperCase()}${path}`;
+  const s = crypto.createSign("RSA-SHA256");
+  s.update(msg);
+  s.end();
+  return s.sign({ key: pem, padding: crypto.constants.RSA_PKCS1_PSS_PADDING, saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST }, "base64");
 }
 
-export async function kalshiFetch(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<any> {
-  const token = await getAuthToken();
-
-  const res = await fetch(`${KALSHI_BASE_URL}${endpoint}`, {
-    ...options,
+async function authFetch(endpoint: string, opts: RequestInit = {}): Promise<any> {
+  const keyId = process.env.KALSHI_API_KEY_ID;
+  if (!keyId) throw new Error("KALSHI_API_KEY_ID not set");
+  const method = (opts.method || "GET").toUpperCase();
+  const path = `/trade-api/v2${endpoint}`;
+  const ts = Date.now();
+  const sig = sign(method, path, ts);
+  const res = await fetch(`${BASE}${endpoint}`, {
+    ...opts,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
+      "KALSHI-ACCESS-KEY": keyId,
+      "KALSHI-ACCESS-TIMESTAMP": ts.toString(),
+      "KALSHI-ACCESS-SIGNATURE": sig,
+      ...opts.headers,
     },
   });
+  if (!res.ok) { const e = await res.text(); throw new Error(`Kalshi ${res.status}: ${e}`); }
+  return res.json();
+}
 
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`Kalshi API error ${res.status}: ${error}`);
-  }
-
+async function pubFetch(endpoint: string): Promise<any> {
+  const res = await fetch(`${BASE}${endpoint}`, { headers: { "Content-Type": "application/json" } });
+  if (!res.ok) { const e = await res.text(); throw new Error(`Kalshi ${res.status}: ${e}`); }
   return res.json();
 }
 
 export const kalshi = {
-  // Get individual markets (each is a tradeable contract)
-  getMarkets: (params?: Record<string, string>) => {
-    const query = params ? "?" + new URLSearchParams(params).toString() : "";
-    return kalshiFetch(`/markets${query}`);
+  getMarkets: (p?: Record<string, string>) => pubFetch(`/markets${p ? "?" + new URLSearchParams(p) : ""}`),
+  getMarket: (t: string) => pubFetch(`/markets/${t}`),
+  getEvents: (p?: Record<string, string>) => {
+    const d: Record<string, string> = { with_nested_markets: "true", status: "open", ...p };
+    return pubFetch(`/events?${new URLSearchParams(d)}`);
   },
-
-  // Get single market by ticker
-  getMarket: (ticker: string) => {
-    return kalshiFetch(`/markets/${ticker}`);
-  },
-
-  // Get events with nested markets
-  getEvents: (params?: Record<string, string>) => {
-    const defaults: Record<string, string> = {
-      with_nested_markets: "true",
-      status: "open",
-    };
-    const merged = { ...defaults, ...params };
-    const query = "?" + new URLSearchParams(merged).toString();
-    return kalshiFetch(`/events${query}`);
-  },
-
-  // Get single event with markets
-  getEvent: (eventTicker: string) => {
-    return kalshiFetch(`/events/${eventTicker}?with_nested_markets=true`);
-  },
-
-  // Get market orderbook
-  getOrderbook: (ticker: string) => {
-    return kalshiFetch(`/markets/${ticker}/orderbook`);
-  },
-
-  // Portfolio
-  getPortfolio: () => kalshiFetch("/portfolio/positions"),
-  getBalance: () => kalshiFetch("/portfolio/balance"),
-
-  // Place order
-  placeOrder: (order: {
-    ticker: string;
-    action: "buy" | "sell";
-    side: "yes" | "no";
-    type: "market" | "limit";
-    count: number;
-    yes_price?: number;
-    no_price?: number;
-  }) => {
-    return kalshiFetch("/portfolio/orders", {
-      method: "POST",
-      body: JSON.stringify(order),
-    });
-  },
+  getEvent: (t: string) => pubFetch(`/events/${t}?with_nested_markets=true`),
+  getOrderbook: (t: string) => pubFetch(`/markets/${t}/orderbook`),
+  getPortfolio: () => authFetch("/portfolio/positions"),
+  getBalance: () => authFetch("/portfolio/balance"),
+  placeOrder: (o: any) => authFetch("/portfolio/orders", { method: "POST", body: JSON.stringify(o) }),
 };

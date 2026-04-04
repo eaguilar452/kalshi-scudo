@@ -1,258 +1,86 @@
 "use client";
-
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 
 interface Market {
-  ticker: string;
-  event_ticker: string;
-  title: string;
-  subtitle: string;
-  no_subtitle: string;
-  category: string;
-  status: string;
-  yes_bid: number;
-  yes_ask: number;
-  no_bid: number;
-  no_ask: number;
-  last_price: number;
-  prev_price: number;
-  volume: number;
-  volume_24h: number;
-  open_interest: number;
-  close_time: string;
-}
-
-interface TradeState {
-  market: Market | null;
-  side: "yes" | "no";
-  count: number;
-  type: "market" | "limit";
-  limitPrice: number;
-  loading: boolean;
-  result: { success: boolean; message: string } | null;
+  ticker: string; event_ticker: string; event_title: string; title: string;
+  category: string; yes_bid: number; yes_ask: number; no_bid: number; no_ask: number;
+  last_price: number; prev_price: number; volume: number; volume_24h: number;
+  open_interest: number; close_time: string;
 }
 
 export default function DashboardPage() {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [totalLoaded, setTotalLoaded] = useState(0);
+  const [search, setSearch] = useState("");
+  const [total, setTotal] = useState(0);
 
-  // Trade modal state
-  const [trade, setTrade] = useState<TradeState>({
-    market: null,
-    side: "yes",
-    count: 1,
-    type: "market",
-    limitPrice: 50,
-    loading: false,
-    result: null,
-  });
+  // Trade modal
+  const [tm, setTm] = useState<{ market: Market; side: "yes" | "no"; count: number; type: "market" | "limit"; lp: number; loading: boolean; result: { ok: boolean; msg: string } | null } | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { load(); }, []);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [marketsRes, balanceRes] = await Promise.allSettled([
-        fetch("/api/kalshi/markets?fetch_all=true"),
-        fetch("/api/kalshi/portfolio"),
-      ]);
-
-      if (marketsRes.status === "fulfilled" && marketsRes.value.ok) {
-        const data = await marketsRes.value.json();
-        setMarkets(data.markets || []);
-        setTotalLoaded(data.total || 0);
-      } else if (marketsRes.status === "fulfilled") {
-        const data = await marketsRes.value.json();
-        setError(data.error || "Failed to load markets");
-      }
-
-      if (balanceRes.status === "fulfilled" && balanceRes.value.ok) {
-        const data = await balanceRes.value.json();
-        setBalance(data.balance);
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  const load = async () => {
+    setLoading(true); setError(null);
+    const [mr, br] = await Promise.allSettled([
+      fetch("/api/kalshi/markets?fetch_all=true"), fetch("/api/kalshi/portfolio"),
+    ]);
+    if (mr.status === "fulfilled" && mr.value.ok) {
+      const d = await mr.value.json(); setMarkets(d.markets || []); setTotal(d.total || 0);
+    } else if (mr.status === "fulfilled") {
+      const d = await mr.value.json(); setError(d.error || "Failed");
     }
+    if (br.status === "fulfilled" && br.value.ok) {
+      const d = await br.value.json(); setBalance(d.balance);
+    }
+    setLoading(false);
   };
 
-  // Trade execution
-  const executeTrade = async () => {
-    if (!trade.market) return;
-
-    setTrade((t) => ({ ...t, loading: true, result: null }));
-
+  const doTrade = async () => {
+    if (!tm) return;
+    setTm({ ...tm, loading: true, result: null });
     try {
-      const body: any = {
-        ticker: trade.market.ticker,
-        action: "buy",
-        side: trade.side,
-        type: trade.type,
-        count: trade.count,
-      };
-
-      if (trade.type === "limit") {
-        // Convert cents to dollars for API
-        const priceInDollars = trade.limitPrice / 100;
-        if (trade.side === "yes") {
-          body.yes_price = priceInDollars;
-        } else {
-          body.no_price = priceInDollars;
-        }
+      const b: any = { ticker: tm.market.ticker, action: "buy", side: tm.side, type: tm.type, count: tm.count };
+      if (tm.type === "limit") {
+        if (tm.side === "yes") b.yes_price = tm.lp / 100; else b.no_price = tm.lp / 100;
       }
-
-      const res = await fetch("/api/kalshi/trade", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setTrade((t) => ({
-          ...t,
-          loading: false,
-          result: {
-            success: true,
-            message: `Order placed: ${trade.count} ${trade.side.toUpperCase()} on ${trade.market!.ticker}`,
-          },
-        }));
-        // Refresh balance
-        fetch("/api/kalshi/portfolio")
-          .then((r) => r.json())
-          .then((d) => setBalance(d.balance))
-          .catch(() => {});
+      const r = await fetch("/api/kalshi/trade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
+      const d = await r.json();
+      if (r.ok && d.success) {
+        setTm({ ...tm, loading: false, result: { ok: true, msg: `Placed: ${tm.count} ${tm.side.toUpperCase()} on ${tm.market.ticker}` } });
+        fetch("/api/kalshi/portfolio").then(r => r.json()).then(d => setBalance(d.balance)).catch(() => {});
       } else {
-        setTrade((t) => ({
-          ...t,
-          loading: false,
-          result: {
-            success: false,
-            message: data.error || "Order failed",
-          },
-        }));
+        setTm({ ...tm, loading: false, result: { ok: false, msg: d.error || "Failed" } });
       }
-    } catch (err: any) {
-      setTrade((t) => ({
-        ...t,
-        loading: false,
-        result: { success: false, message: err.message },
-      }));
-    }
+    } catch (e: any) { setTm({ ...tm, loading: false, result: { ok: false, msg: e.message } }); }
   };
 
-  const openTrade = (market: Market, side: "yes" | "no") => {
-    const price =
-      side === "yes"
-        ? Math.round(market.yes_ask * 100)
-        : Math.round(market.no_ask * 100);
-    setTrade({
-      market,
-      side,
-      count: 1,
-      type: "market",
-      limitPrice: price || 50,
-      loading: false,
-      result: null,
-    });
+  const fmt = (d: number) => !d ? "—" : `${Math.round(d * 100)}¢`;
+  const pct = (d: number) => !d ? 0 : Math.round(d * 100);
+  const chg = (c: number, p: number) => !p || !c ? 0 : Math.round((c - p) * 100);
+  const vol = (v: number) => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : `${Math.round(v)}`;
+  const ttc = (t: string) => {
+    if (!t) return ""; const d = new Date(t).getTime() - Date.now();
+    if (d < 0) return "Ended"; const days = Math.floor(d / 864e5); const hrs = Math.floor((d % 864e5) / 36e5);
+    return days > 0 ? `${days}d` : hrs > 0 ? `${hrs}h` : `${Math.floor((d % 36e5) / 6e4)}m`;
   };
 
-  const closeTrade = () => {
-    setTrade({
-      market: null,
-      side: "yes",
-      count: 1,
-      type: "market",
-      limitPrice: 50,
-      loading: false,
-      result: null,
-    });
-  };
-
-  // Helpers
-  const formatPrice = (dollars: number) => {
-    if (!dollars || dollars === 0) return "—";
-    return `${Math.round(dollars * 100)}¢`;
-  };
-
-  const formatProbability = (dollars: number) => {
-    if (!dollars) return 0;
-    return Math.round(dollars * 100);
-  };
-
-  const priceChange = (current: number, prev: number) => {
-    if (!prev || !current) return 0;
-    return Math.round((current - prev) * 100);
-  };
-
-  const formatVolume = (vol: number) => {
-    if (vol >= 1_000_000) return `${(vol / 1_000_000).toFixed(1)}M`;
-    if (vol >= 1_000) return `${(vol / 1_000).toFixed(0)}K`;
-    return Math.round(vol).toString();
-  };
-
-  const timeUntilClose = (closeTime: string) => {
-    if (!closeTime) return "";
-    const now = new Date();
-    const close = new Date(closeTime);
-    const diff = close.getTime() - now.getTime();
-    if (diff < 0) return "Closed";
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor(
-      (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-    );
-    if (days > 0) return `${days}d`;
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (hours > 0) return `${hours}h`;
-    return `${mins}m`;
-  };
-
-  // Get unique categories
-  const categories = [
-    "all",
-    ...Array.from(
-      new Set(markets.map((m) => m.category).filter(Boolean))
-    ).sort(),
-  ];
-
-  // Filter + search
-  const filteredMarkets = markets.filter((m) => {
-    const matchesCategory = filter === "all" || m.category === filter;
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      !q ||
-      m.title.toLowerCase().includes(q) ||
-      m.subtitle.toLowerCase().includes(q) ||
-      m.ticker.toLowerCase().includes(q) ||
-      m.event_ticker.toLowerCase().includes(q);
-    return matchesCategory && matchesSearch;
+  const cats = ["all", ...Array.from(new Set(markets.map(m => m.category).filter(Boolean))).sort()];
+  const filtered = markets.filter(m => {
+    if (filter !== "all" && m.category !== filter) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return m.title.toLowerCase().includes(q) || m.event_title.toLowerCase().includes(q) || m.ticker.toLowerCase().includes(q) || m.category.toLowerCase().includes(q);
   });
 
-  // Estimate cost for trade modal
-  const estimatedCost = () => {
-    if (!trade.market) return 0;
-    const price =
-      trade.type === "limit"
-        ? trade.limitPrice
-        : trade.side === "yes"
-        ? Math.round(trade.market.yes_ask * 100)
-        : Math.round(trade.market.no_ask * 100);
-    return ((price * trade.count) / 100).toFixed(2);
+  const cost = () => {
+    if (!tm) return "0.00";
+    const p = tm.type === "limit" ? tm.lp : (tm.side === "yes" ? Math.round(tm.market.yes_ask * 100) : Math.round(tm.market.no_ask * 100));
+    return ((p * tm.count) / 100).toFixed(2);
   };
-
-  const maxPayout = () => {
-    return (trade.count * 1).toFixed(2); // Each contract pays $1 on win
-  };
+  const pay = () => tm ? (tm.count).toFixed(2) : "0.00";
 
   return (
     <div className="space-y-6">
@@ -261,171 +89,65 @@ export default function DashboardPage() {
         <div>
           <h1 className="font-display text-2xl font-bold text-white flex items-center gap-3">
             Live Markets
-            {!loading && !error && (
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-pill bg-green-subtle border border-green-muted text-green-glow text-xs font-medium">
-                <span
-                  className="light-green animate-pulse-dot"
-                  style={{ width: "6px", height: "6px" }}
-                />
-                {totalLoaded} contracts
-              </span>
-            )}
+            {!loading && !error && <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-subtle border border-green-muted text-xs font-medium" style={{ color: "#00FF88" }}><span className="light-green anim-pulse" style={{ width: 6, height: 6 }} />{total}</span>}
           </h1>
-          <p className="mt-1 text-sm text-slate-muted">
-            Sorted by volume &middot; All categories
-          </p>
+          <p className="mt-1 text-sm text-slate-muted">Sorted by volume</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
-            <p className="text-[10px] uppercase tracking-widest text-slate-muted">
-              Balance
-            </p>
-            <p className="font-mono text-sm font-bold text-white">
-              {balance !== null ? `$${(balance / 100).toFixed(2)}` : "—"}
-            </p>
+            <p className="text-[10px] uppercase tracking-widest text-slate-muted">Balance</p>
+            <p className="font-mono text-sm font-bold text-white">{balance !== null ? `$${(balance / 100).toFixed(2)}` : "—"}</p>
           </div>
-          <button onClick={fetchData} className="btn-ghost text-xs">
-            ↻
-          </button>
+          <button onClick={load} className="btn-ghost text-xs">↻</button>
         </div>
       </div>
 
       {/* Search + filters */}
       <div className="space-y-3">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by name, ticker, or keyword..."
-          className="text-sm"
-        />
-        <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              className={`px-3 py-1.5 rounded-pill text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
-                filter === cat
-                  ? "bg-green-glow text-black"
-                  : "bg-bg-card border border-slate-border text-slate-muted hover:text-white hover:border-slate-divider"
-              }`}
-            >
-              {cat === "all"
-                ? `All (${markets.length})`
-                : `${cat.charAt(0).toUpperCase() + cat.slice(1)}`}
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search markets..." className="text-sm" />
+        <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+          {cats.map(c => (
+            <button key={c} onClick={() => setFilter(c)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${filter === c ? "bg-green-glow text-black" : "bg-bg-card border border-slate-border text-slate-muted hover:text-white"}`}>
+              {c === "all" ? `All (${markets.length})` : c}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Results count */}
-      {searchQuery && (
-        <p className="text-xs text-slate-muted">
-          {filteredMarkets.length} result{filteredMarkets.length !== 1 ? "s" : ""} for &ldquo;{searchQuery}&rdquo;
-        </p>
-      )}
+      {search && <p className="text-xs text-slate-muted">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</p>}
 
-      {/* Market cards */}
-      {!loading && filteredMarkets.length > 0 && (
+      {/* Cards */}
+      {!loading && filtered.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredMarkets.slice(0, 300).map((market, i) => {
-            const prob = formatProbability(market.last_price);
-            const change = priceChange(market.last_price, market.prev_price);
-
+          {filtered.slice(0, 300).map((m, i) => {
+            const p = pct(m.last_price); const c = chg(m.last_price, m.prev_price);
             return (
-              <div
-                key={market.ticker}
-                className="gl-card p-4 flex flex-col animate-slide-up"
-                style={{
-                  animationDelay: `${Math.min(i * 0.02, 0.2)}s`,
-                  opacity: 0,
-                }}
-              >
-                {/* Top — category + time */}
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] uppercase tracking-widest text-slate-muted font-medium truncate mr-2">
-                    {market.category || market.event_ticker}
-                  </span>
+              <div key={m.ticker} className="gl-card p-4 flex flex-col anim-slide" style={{ animationDelay: `${Math.min(i * 0.02, 0.2)}s`, opacity: 0 }}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] uppercase tracking-widest text-slate-muted truncate mr-2">{m.category}</span>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {change !== 0 && (
-                      <span
-                        className={`text-[10px] font-mono font-bold ${
-                          change > 0 ? "text-green-glow" : "text-red-glow"
-                        }`}
-                      >
-                        {change > 0 ? "▲" : "▼"}
-                        {Math.abs(change)}¢
-                      </span>
-                    )}
-                    <span className="text-[10px] text-slate-muted font-mono">
-                      {timeUntilClose(market.close_time)}
-                    </span>
+                    {c !== 0 && <span className={`text-[10px] font-mono font-bold ${c > 0 ? "text-green-glow" : "text-red-glow"}`}>{c > 0 ? "▲" : "▼"}{Math.abs(c)}¢</span>}
+                    <span className="text-[10px] text-slate-muted font-mono">{ttc(m.close_time)}</span>
                   </div>
                 </div>
-
-                {/* Title */}
-                <h3 className="font-display text-[15px] font-semibold text-white mb-3 leading-snug flex-1 line-clamp-2">
-                  {market.title}
-                </h3>
-
-                {/* Probability bar */}
-                {prob > 0 && (
+                {m.event_title && m.event_title !== m.title && <p className="text-[10px] text-slate-muted mb-0.5 truncate">{m.event_title}</p>}
+                <h3 className="font-display text-[15px] font-semibold text-white mb-3 leading-snug flex-1" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{m.title}</h3>
+                {p > 0 && (
                   <div className="mb-3">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[11px] font-mono text-green-glow font-bold">
-                        {prob}%
-                      </span>
-                      <span className="text-[11px] font-mono text-red-glow font-bold">
-                        {100 - prob}%
-                      </span>
+                      <span className="text-[11px] font-mono font-bold" style={{ color: "#00FF88" }}>{p}%</span>
+                      <span className="text-[11px] font-mono font-bold text-red-glow">{100 - p}%</span>
                     </div>
-                    <div className="prob-bar">
-                      <div
-                        className="prob-fill-green"
-                        style={{ width: `${prob}%` }}
-                      />
-                    </div>
+                    <div className="prob-bar"><div className="prob-fill" style={{ width: `${p}%` }} /></div>
                   </div>
                 )}
-
-                {/* Price row */}
                 <div className="flex items-end justify-between pt-2 border-t border-slate-border">
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <p className="text-[9px] uppercase tracking-wider text-slate-muted">
-                        Bid / Ask
-                      </p>
-                      <p className="font-mono text-xs text-white">
-                        {formatPrice(market.yes_bid)}{" "}
-                        <span className="text-slate-muted">/</span>{" "}
-                        {formatPrice(market.yes_ask)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[9px] uppercase tracking-wider text-slate-muted">
-                      Vol
-                    </p>
-                    <p className="font-mono text-xs text-slate-text">
-                      {formatVolume(market.volume)}
-                    </p>
-                  </div>
+                  <div><p className="text-[9px] uppercase tracking-wider text-slate-muted">Bid / Ask</p><p className="font-mono text-xs text-white">{fmt(m.yes_bid)} <span className="text-slate-muted">/</span> {fmt(m.yes_ask)}</p></div>
+                  <div className="text-right"><p className="text-[9px] uppercase tracking-wider text-slate-muted">Vol</p><p className="font-mono text-xs text-slate-text">{vol(m.volume)}</p></div>
                 </div>
-
-                {/* Trade buttons */}
                 <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => openTrade(market, "yes")}
-                    className="flex-1 btn-green py-2 text-xs"
-                  >
-                    Yes {formatPrice(market.yes_ask)}
-                  </button>
-                  <button
-                    onClick={() => openTrade(market, "no")}
-                    className="flex-1 btn-red py-2 text-xs"
-                  >
-                    No {formatPrice(market.no_ask)}
-                  </button>
+                  <button onClick={() => setTm({ market: m, side: "yes", count: 1, type: "market", lp: Math.round(m.yes_ask * 100) || 50, loading: false, result: null })} className="flex-1 btn-green py-2 text-xs">Yes {fmt(m.yes_ask)}</button>
+                  <button onClick={() => setTm({ market: m, side: "no", count: 1, type: "market", lp: Math.round(m.no_ask * 100) || 50, loading: false, result: null })} className="flex-1 btn-red py-2 text-xs">No {fmt(m.no_ask)}</button>
                 </div>
               </div>
             );
@@ -433,275 +155,65 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Show more indicator */}
-      {!loading && filteredMarkets.length > 300 && (
-        <div className="text-center py-4">
-          <p className="text-sm text-slate-muted">
-            Showing 300 of {filteredMarkets.length} markets. Use search to find specific contracts.
-          </p>
-        </div>
-      )}
+      {!loading && filtered.length > 300 && <p className="text-center text-sm text-slate-muted py-4">Showing 300 of {filtered.length}. Search to narrow.</p>}
+      {loading && <div className="text-center py-12"><div className="light-green mx-auto mb-3 anim-glow" style={{ width: 16, height: 16 }} /><p className="text-sm text-slate-muted">Loading markets...</p></div>}
+      {!loading && error && <div className="gl-card p-10 text-center"><div className="light-red mx-auto mb-4" style={{ width: 16, height: 16 }} /><h3 className="font-display text-lg font-bold text-white mb-2">Error</h3><p className="text-sm text-slate-muted mb-4">{error}</p><button onClick={load} className="btn-ghost text-xs">Retry</button></div>}
 
-      {/* Loading */}
-      {loading && (
-        <div className="space-y-4">
-          <div className="text-center py-8">
-            <div className="light-green mx-auto mb-3 animate-glow-pulse" style={{ width: "16px", height: "16px" }} />
-            <p className="text-sm text-slate-muted">Loading all markets from Kalshi...</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="gl-card p-4 animate-pulse">
-                <div className="h-2 bg-bg-hover rounded w-16 mb-3" />
-                <div className="h-4 bg-bg-hover rounded w-full mb-2" />
-                <div className="h-4 bg-bg-hover rounded w-3/4 mb-4" />
-                <div className="h-1 bg-bg-hover rounded w-full mb-4" />
-                <div className="flex gap-2 mt-3">
-                  <div className="flex-1 h-8 bg-green-subtle rounded-lg" />
-                  <div className="flex-1 h-8 bg-red-subtle rounded-lg" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Error */}
-      {!loading && error && (
-        <div className="gl-card p-10 text-center">
-          <div
-            className="light-red mx-auto mb-4"
-            style={{ width: "16px", height: "16px" }}
-          />
-          <h3 className="font-display text-lg font-bold text-white mb-2">
-            Connection Error
-          </h3>
-          <p className="text-sm text-slate-muted max-w-md mx-auto">{error}</p>
-          <button onClick={fetchData} className="btn-ghost text-xs mt-4">
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* ═══════════ TRADE MODAL ═══════════ */}
-      {trade.market && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeTrade();
-          }}
-        >
-          {/* Backdrop */}
+      {/* TRADE MODAL */}
+      {tm && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={e => { if (e.target === e.currentTarget) setTm(null); }}>
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-
-          {/* Modal */}
-          <div className="relative bg-bg-secondary border border-slate-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-6 animate-slide-up shadow-2xl">
-            {/* Close */}
-            <button
-              onClick={closeTrade}
-              className="absolute top-4 right-4 text-slate-muted hover:text-white text-lg"
-            >
-              ✕
-            </button>
-
-            {/* Market info */}
+          <div className="relative bg-bg-secondary border border-slate-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-6 anim-slide shadow-2xl" style={{ opacity: 0 }}>
+            <button onClick={() => setTm(null)} className="absolute top-4 right-4 text-slate-muted hover:text-white text-lg">✕</button>
             <div className="mb-5">
-              <p className="text-[10px] uppercase tracking-widest text-slate-muted mb-1">
-                {trade.market.category || trade.market.event_ticker}
-              </p>
-              <h3 className="font-display text-lg font-bold text-white leading-snug">
-                {trade.market.title}
-              </h3>
+              <p className="text-[10px] uppercase tracking-widest text-slate-muted mb-1">{tm.market.category}</p>
+              {tm.market.event_title && tm.market.event_title !== tm.market.title && <p className="text-xs text-slate-muted mb-1">{tm.market.event_title}</p>}
+              <h3 className="font-display text-lg font-bold text-white leading-snug">{tm.market.title}</h3>
             </div>
-
-            {/* Side selector */}
+            {/* Side */}
             <div className="flex gap-2 mb-5">
-              <button
-                onClick={() => setTrade((t) => ({ ...t, side: "yes" }))}
-                className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${
-                  trade.side === "yes"
-                    ? "bg-green-glow text-black shadow-green-glow"
-                    : "bg-bg-card border border-slate-border text-slate-muted"
-                }`}
-              >
-                YES {formatPrice(trade.market.yes_ask)}
-              </button>
-              <button
-                onClick={() => setTrade((t) => ({ ...t, side: "no" }))}
-                className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${
-                  trade.side === "no"
-                    ? "bg-red-glow text-white shadow-red-glow"
-                    : "bg-bg-card border border-slate-border text-slate-muted"
-                }`}
-              >
-                NO {formatPrice(trade.market.no_ask)}
-              </button>
+              <button onClick={() => setTm({ ...tm, side: "yes" })} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${tm.side === "yes" ? "bg-green-glow text-black" : "bg-bg-card border border-slate-border text-slate-muted"}`}>YES {fmt(tm.market.yes_ask)}</button>
+              <button onClick={() => setTm({ ...tm, side: "no" })} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${tm.side === "no" ? "bg-red-glow text-white" : "bg-bg-card border border-slate-border text-slate-muted"}`}>NO {fmt(tm.market.no_ask)}</button>
             </div>
-
             {/* Order type */}
             <div className="flex gap-2 mb-4">
-              <button
-                onClick={() => setTrade((t) => ({ ...t, type: "market" }))}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                  trade.type === "market"
-                    ? "bg-bg-card border border-green-muted text-green-glow"
-                    : "bg-bg-card border border-slate-border text-slate-muted"
-                }`}
-              >
-                Market Order
-              </button>
-              <button
-                onClick={() => setTrade((t) => ({ ...t, type: "limit" }))}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                  trade.type === "limit"
-                    ? "bg-bg-card border border-green-muted text-green-glow"
-                    : "bg-bg-card border border-slate-border text-slate-muted"
-                }`}
-              >
-                Limit Order
-              </button>
+              <button onClick={() => setTm({ ...tm, type: "market" })} className={`flex-1 py-2 rounded-lg text-xs font-medium ${tm.type === "market" ? "bg-bg-card border border-green-muted text-green-glow" : "bg-bg-card border border-slate-border text-slate-muted"}`}>Market</button>
+              <button onClick={() => setTm({ ...tm, type: "limit" })} className={`flex-1 py-2 rounded-lg text-xs font-medium ${tm.type === "limit" ? "bg-bg-card border border-green-muted text-green-glow" : "bg-bg-card border border-slate-border text-slate-muted"}`}>Limit</button>
             </div>
-
-            {/* Contracts count */}
+            {/* Count */}
             <div className="mb-4">
-              <label className="block text-xs font-medium text-slate-text uppercase tracking-wider mb-2">
-                Contracts
-              </label>
+              <label className="block text-xs font-medium text-slate-text uppercase tracking-wider mb-2">Contracts</label>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() =>
-                    setTrade((t) => ({
-                      ...t,
-                      count: Math.max(1, t.count - 1),
-                    }))
-                  }
-                  className="w-10 h-10 rounded-lg bg-bg-card border border-slate-border text-white font-bold hover:border-slate-divider transition-all"
-                >
-                  −
-                </button>
-                <input
-                  type="number"
-                  value={trade.count}
-                  onChange={(e) =>
-                    setTrade((t) => ({
-                      ...t,
-                      count: Math.max(1, Number(e.target.value)),
-                    }))
-                  }
-                  className="w-20 text-center font-mono text-lg font-bold"
-                  min={1}
-                />
-                <button
-                  onClick={() =>
-                    setTrade((t) => ({ ...t, count: t.count + 1 }))
-                  }
-                  className="w-10 h-10 rounded-lg bg-bg-card border border-slate-border text-white font-bold hover:border-slate-divider transition-all"
-                >
-                  +
-                </button>
+                <button onClick={() => setTm({ ...tm, count: Math.max(1, tm.count - 1) })} className="w-10 h-10 rounded-lg bg-bg-card border border-slate-border text-white font-bold">−</button>
+                <input type="number" value={tm.count} onChange={e => setTm({ ...tm, count: Math.max(1, Number(e.target.value)) })} className="w-20 text-center font-mono text-lg font-bold" min={1} />
+                <button onClick={() => setTm({ ...tm, count: tm.count + 1 })} className="w-10 h-10 rounded-lg bg-bg-card border border-slate-border text-white font-bold">+</button>
                 <div className="flex gap-1 ml-auto">
-                  {[5, 10, 25].map((n) => (
-                    <button
-                      key={n}
-                      onClick={() => setTrade((t) => ({ ...t, count: n }))}
-                      className="px-2 py-1 rounded text-[10px] font-mono bg-bg-card border border-slate-border text-slate-muted hover:text-white transition-all"
-                    >
-                      {n}
-                    </button>
-                  ))}
+                  {[5, 10, 25].map(n => <button key={n} onClick={() => setTm({ ...tm, count: n })} className="px-2 py-1 rounded text-[10px] font-mono bg-bg-card border border-slate-border text-slate-muted hover:text-white">{n}</button>)}
                 </div>
               </div>
             </div>
-
-            {/* Limit price */}
-            {trade.type === "limit" && (
+            {tm.type === "limit" && (
               <div className="mb-4">
-                <label className="block text-xs font-medium text-slate-text uppercase tracking-wider mb-2">
-                  Limit Price (¢)
-                </label>
-                <input
-                  type="number"
-                  value={trade.limitPrice}
-                  onChange={(e) =>
-                    setTrade((t) => ({
-                      ...t,
-                      limitPrice: Number(e.target.value),
-                    }))
-                  }
-                  min={1}
-                  max={99}
-                  className="w-32 font-mono"
-                />
+                <label className="block text-xs font-medium text-slate-text uppercase tracking-wider mb-2">Limit Price (¢)</label>
+                <input type="number" value={tm.lp} onChange={e => setTm({ ...tm, lp: Number(e.target.value) })} min={1} max={99} className="w-32 font-mono" />
               </div>
             )}
-
-            {/* Cost summary */}
+            {/* Summary */}
             <div className="bg-bg-card rounded-lg p-4 mb-5 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-muted">Estimated cost</span>
-                <span className="font-mono font-bold text-white">
-                  ${estimatedCost()}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-muted">Max payout</span>
-                <span className="font-mono font-bold text-green-glow">
-                  ${maxPayout()}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-muted">Potential profit</span>
-                <span className="font-mono font-bold text-green-glow">
-                  $
-                  {(
-                    Number(maxPayout()) - Number(estimatedCost())
-                  ).toFixed(2)}
-                </span>
-              </div>
+              <div className="flex justify-between text-sm"><span className="text-slate-muted">Cost</span><span className="font-mono font-bold text-white">${cost()}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-slate-muted">Max payout</span><span className="font-mono font-bold" style={{ color: "#00FF88" }}>${pay()}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-slate-muted">Profit if win</span><span className="font-mono font-bold" style={{ color: "#00FF88" }}>${(Number(pay()) - Number(cost())).toFixed(2)}</span></div>
             </div>
-
-            {/* Result message */}
-            {trade.result && (
-              <div
-                className={`mb-4 px-4 py-3 rounded-lg text-sm ${
-                  trade.result.success
-                    ? "bg-green-subtle border border-green-muted text-green-glow"
-                    : "bg-red-subtle border border-red-muted text-red-glow"
-                }`}
-              >
-                {trade.result.message}
-              </div>
-            )}
-
-            {/* Execute button */}
-            <button
-              onClick={executeTrade}
-              disabled={trade.loading}
-              className={`w-full py-3.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 ${
-                trade.side === "yes"
-                  ? "btn-green shadow-green-glow"
-                  : "btn-red shadow-red-glow"
-              }`}
-            >
-              {trade.loading
-                ? "Placing order..."
-                : `Buy ${trade.count} ${trade.side.toUpperCase()} → $${estimatedCost()}`}
+            {tm.result && <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${tm.result.ok ? "bg-green-subtle border border-green-muted text-green-glow" : "bg-red-subtle border border-red-muted text-red-glow"}`}>{tm.result.msg}</div>}
+            <button onClick={doTrade} disabled={tm.loading} className={`w-full py-3.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 ${tm.side === "yes" ? "btn-green" : "btn-red"}`}>
+              {tm.loading ? "Placing..." : `Buy ${tm.count} ${tm.side.toUpperCase()} → $${cost()}`}
             </button>
-
-            <p className="text-[10px] text-slate-muted text-center mt-3">
-              Real money. Orders execute immediately on Kalshi.
-            </p>
+            <p className="text-[10px] text-slate-muted text-center mt-3">Real money. Orders execute on Kalshi.</p>
           </div>
         </div>
       )}
 
-      {/* Footer */}
-      <div className="pt-6 border-t border-slate-border text-center">
-        <p className="text-[10px] text-slate-muted">
-          Greenlight &middot; Market data by Kalshi Inc. &middot; Not financial
-          advice.
-        </p>
-      </div>
+      <div className="pt-6 border-t border-slate-border text-center"><p className="text-[10px] text-slate-muted">Greenlight &middot; Kalshi Inc. &middot; Not financial advice.</p></div>
     </div>
   );
 }
