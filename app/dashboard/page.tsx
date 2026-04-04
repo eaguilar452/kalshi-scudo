@@ -91,7 +91,7 @@ export default function DashboardPage() {
     return `${mins}m`;
   };
 
-  const categories = ["all", ...new Set(markets.map((m) => m.category).filter(Boolean))];
+  const categories = ["all", ...Array.from(new Set(markets.map((m) => m.category).filter(Boolean)))];
 
   const filteredMarkets = markets.filter((m) => {
     const matchesCategory = filter === "all" || m.category === filter;
