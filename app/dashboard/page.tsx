@@ -43,9 +43,10 @@ export default function DashboardPage() {
     setTm({ ...tm, loading: true, result: null });
     try {
       const b: any = { ticker: tm.market.ticker, action: "buy", side: tm.side, type: tm.type, count: tm.count };
-      if (tm.type === "limit") {
-        if (tm.side === "yes") b.yes_price = tm.lp / 100; else b.no_price = tm.lp / 100;
-      }
+      // Always send price — Kalshi requires it
+      const askPrice = tm.type === "limit" ? tm.lp / 100 : (tm.side === "yes" ? tm.market.yes_ask : tm.market.no_ask);
+      if (tm.side === "yes") b.yes_price = askPrice || 0.99;
+      else b.no_price = askPrice || 0.99;
       const r = await fetch("/api/kalshi/trade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
       const d = await r.json();
       if (r.ok && d.success) {
