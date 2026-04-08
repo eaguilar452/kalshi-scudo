@@ -3,10 +3,32 @@ import { kalshi } from "@/lib/kalshi";
 
 export const dynamic = "force-dynamic";
 
+const SPORTS_CATEGORIES = new Set([
+  "Sports", "NFL", "NBA", "MLB", "NHL", "MLS", "Soccer", "Tennis",
+  "Golf", "UFC", "MMA", "Boxing", "F1", "NASCAR", "College Football",
+  "College Basketball", "WNBA", "Cricket", "Rugby",
+  // Kalshi sometimes uses lowercase
+  "sports", "nfl", "nba", "mlb", "nhl", "mls", "soccer", "tennis",
+  "golf", "ufc", "mma", "boxing", "f1",
+]);
+
+function isSportsCategory(cat: string): boolean {
+  if (!cat) return false;
+  if (SPORTS_CATEGORIES.has(cat)) return true;
+  const lower = cat.toLowerCase();
+  return lower.includes("sport") || lower.includes("nba") || lower.includes("nfl") ||
+    lower.includes("mlb") || lower.includes("nhl") || lower.includes("soccer") ||
+    lower.includes("tennis") || lower.includes("golf") || lower.includes("ufc") ||
+    lower.includes("mma") || lower.includes("boxing") || lower.includes("mls") ||
+    lower.includes("f1") || lower.includes("nascar") || lower.includes("college") ||
+    lower.includes("wnba") || lower.includes("cricket");
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const fetchAll = searchParams.get("fetch_all") === "true";
+    const sportsOnly = searchParams.get("sports_only") !== "false";
     const limit = searchParams.get("limit") || "100";
 
     type M = { ticker: string; event_ticker: string; event_title: string; title: string; category: string; yes_bid: number; yes_ask: number; no_bid: number; no_ask: number; last_price: number; prev_price: number; volume: number; volume_24h: number; open_interest: number; close_time: string };
@@ -20,9 +42,10 @@ export async function GET(request: Request) {
       const data = await kalshi.getEvents(params);
 
       for (const ev of data.events || []) {
+        if (sportsOnly && !isSportsCategory(ev.category || "")) continue;
+
         for (const m of ev.markets || []) {
           if (m.status !== "open" && m.status !== "active") continue;
-          // Build clean title
           let title = m.yes_sub_title || m.title || ev.title || "";
           if (title.includes(",yes ") || title.includes(",no ")) title = ev.title || m.ticker;
 
