@@ -89,11 +89,22 @@ export default function LoginPage() {
               {message && <div style={{ color: "#00FF88" }} className="text-sm bg-green-subtle border border-green-muted rounded-lg px-4 py-3">{message}</div>}
               <button type="submit" disabled={loading} className="btn-green w-full py-3 disabled:opacity-50">{loading ? "..." : isSignUp ? "Start Free Trial" : "Sign In"}</button>
             </form>
-            <div className="mt-5 text-center">
+            <div className="mt-5 text-center space-y-2">
               <button onClick={() => { setIsSignUp(!isSignUp); setError(null); setMessage(null); }} className="text-sm transition-opacity hover:opacity-80" style={{ color: "#00E67A" }}>
                 {isSignUp ? "Already have an account? Sign in" : "New here? Start your free trial"}
               </button>
+              {!isSignUp && (
+                <div><a href="/forgot-password" className="text-xs text-slate-muted hover:text-white transition-colors">Forgot your password?</a></div>
+              )}
             </div>
+          </div>
+          <div className="mt-6 text-center space-y-2">
+            <div className="flex items-center justify-center gap-3">
+              <a href="/terms" className="text-[11px] text-slate-muted hover:text-white transition-colors">Terms of Service</a>
+              <span className="text-slate-border">·</span>
+              <a href="/privacy" className="text-[11px] text-slate-muted hover:text-white transition-colors">Privacy Policy</a>
+            </div>
+            <p className="text-[10px] text-slate-muted leading-relaxed max-w-sm mx-auto">Trading involves risk. You may lose your entire investment. Greenlight is not a sportsbook — all trades execute on Kalshi, a CFTC-regulated exchange.</p>
           </div>
         </div>
       </div>

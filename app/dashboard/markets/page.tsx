@@ -76,7 +76,7 @@ export default function MarketsPage() {
                   </div>
                 </div>
                 {m.event_title && m.event_title!==m.title && <p className="text-[10px] text-slate-muted truncate">{m.event_title}</p>}
-                <h3 className="font-display text-[14px] font-semibold text-white mb-3 leading-snug flex-1 line-clamp-2">{m.title}</h3>
+                <a href={`/dashboard/market/${m.ticker}`} className="font-display text-[14px] font-semibold text-white mb-3 leading-snug flex-1 line-clamp-2 hover:text-green-glow transition-colors cursor-pointer">{m.title}</a>
                 {p>0 && <div className="mb-3"><div className="flex justify-between mb-1"><span className="text-[11px] font-mono font-bold" style={{color:"#00FF88"}}>{p}%</span><span className="text-[11px] font-mono font-bold text-red-glow">{100-p}%</span></div><div className="prob-bar"><div className="prob-fill" style={{width:`${p}%`}}/></div></div>}
                 <div className="flex items-end justify-between pt-2 border-t border-slate-border">
                   <div><p className="text-[9px] uppercase tracking-wider text-slate-muted">Bid / Ask</p><p className="font-mono text-xs text-white">{fmt(m.yes_bid)} <span className="text-slate-muted">/</span> {fmt(m.yes_ask)}</p></div>

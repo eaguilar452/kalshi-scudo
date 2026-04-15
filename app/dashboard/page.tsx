@@ -42,11 +42,13 @@ interface Market {
 export default function HomePage() {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
+  const [connected, setConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
     fetch("/api/kalshi/markets?limit=12&sports_only=true")
       .then(r => r.json()).then(d => setMarkets(d.markets || []))
       .catch(() => {}).finally(() => setLoading(false));
+    fetch("/api/kalshi/portfolio").then(r => { setConnected(r.ok); }).catch(() => setConnected(false));
   }, []);
 
   const fmt = (d: number) => !d ? "—" : `${Math.round(d * 100)}¢`;
@@ -68,6 +70,22 @@ export default function HomePage() {
           <a href="/dashboard/markets" className="btn-ghost text-sm py-3 px-8">Browse Markets</a>
         </div>
       </div>
+
+      {/* Connection CTA */}
+      {connected === false && (
+        <a href="/dashboard/settings" className="block gl-card-static p-5 border-yellow-500/20 hover:border-yellow-500/40 transition-all" style={{ background: "linear-gradient(135deg, rgba(255,215,0,0.03), rgba(255,215,0,0.01))" }}>
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-bg-secondary border border-slate-border flex items-center justify-center flex-shrink-0">
+              <span className="text-lg">🔗</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-white">Connect your Kalshi account to start trading</p>
+              <p className="text-xs text-slate-muted mt-0.5">Link your API key to enable auto-bet, portfolio tracking, and live trading.</p>
+            </div>
+            <span className="text-xs font-medium text-yellow-400 flex-shrink-0">Set up →</span>
+          </div>
+        </a>
+      )}
 
       {/* Featured Brackets */}
       <div>
@@ -133,7 +151,7 @@ export default function HomePage() {
                     <span className="text-[10px] text-slate-muted font-mono">{vol(m.volume)} vol</span>
                   </div>
                   {m.event_title && m.event_title !== m.title && <p className="text-[10px] text-slate-muted truncate">{m.event_title}</p>}
-                  <h3 className="font-display text-[14px] font-semibold text-white mb-3 leading-snug flex-1 line-clamp-2">{m.title}</h3>
+                  <a href={`/dashboard/market/${m.ticker}`} className="font-display text-[14px] font-semibold text-white mb-3 leading-snug flex-1 line-clamp-2 hover:text-green-glow transition-colors">{m.title}</a>
                   {p > 0 && (
                     <div className="mb-3">
                       <div className="flex justify-between mb-1">
